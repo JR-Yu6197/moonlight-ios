@@ -26,7 +26,8 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     NSMutableSet* keysDown;
     
     float streamAspectRatio;
-    
+    int videoScalingMode;
+
     // iOS 13.4 mouse support
     NSInteger lastMouseButtonMask;
     float lastMouseX;
@@ -56,7 +57,11 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     self->streamAspectRatio = (float)streamConfig.width / (float)streamConfig.height;
     
     TemporarySettings* settings = [[[DataManager alloc] init] getSettings];
-    
+
+    // The video can extend past our bounds when it's scaled to fill them
+    self->videoScalingMode = settings.videoScalingMode;
+    self.clipsToBounds = (videoScalingMode == VIDEO_SCALING_FILL);
+
     keysDown = [[NSMutableSet alloc] init];
     keyInputField = [[KeyboardInputField alloc] initWithFrame:CGRectZero];
     [keyInputField setKeyboardType:UIKeyboardTypeDefault];
@@ -180,10 +185,33 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 }
 
 - (CGSize) getVideoAreaSize {
-    if (self.bounds.size.width > self.bounds.size.height * streamAspectRatio) {
-        return CGSizeMake(self.bounds.size.height * streamAspectRatio, self.bounds.size.height);
-    } else {
-        return CGSizeMake(self.bounds.size.width, self.bounds.size.width / streamAspectRatio);
+    if (streamAspectRatio <= 0) {
+        // Not set up yet
+        return self.bounds.size;
+    }
+
+    switch (videoScalingMode) {
+        case VIDEO_SCALING_STRETCH:
+            // Fill our bounds, distorting the video if the aspect ratios differ
+            return self.bounds.size;
+
+        case VIDEO_SCALING_FILL:
+            // Fill our bounds while preserving the aspect ratio, cropping the edges
+            // of the video that don't fit (like the sides of a 16:9 stream on the
+            // inner display of iPhone Duo)
+            if (self.bounds.size.width > self.bounds.size.height * streamAspectRatio) {
+                return CGSizeMake(self.bounds.size.width, self.bounds.size.width / streamAspectRatio);
+            } else {
+                return CGSizeMake(self.bounds.size.height * streamAspectRatio, self.bounds.size.height);
+            }
+
+        case VIDEO_SCALING_FIT:
+        default:
+            if (self.bounds.size.width > self.bounds.size.height * streamAspectRatio) {
+                return CGSizeMake(self.bounds.size.height * streamAspectRatio, self.bounds.size.height);
+            } else {
+                return CGSizeMake(self.bounds.size.width, self.bounds.size.width / streamAspectRatio);
+            }
     }
 }
 
@@ -233,7 +261,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         y++;
     }
     
-    // This logic mimics what iOS does with AVLayerVideoGravityResizeAspect
+    // The video is centered in our bounds (see layoutSubviews)
     CGSize videoSize = [self getVideoAreaSize];
     CGPoint videoOrigin = CGPointMake(self.bounds.size.width / 2 - videoSize.width / 2,
                                       self.bounds.size.height / 2 - videoSize.height / 2);
@@ -703,25 +731,19 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         }
     }
     
-    // This logic mimics what iOS does with AVLayerVideoGravityResizeAspect
-    CGSize videoSize;
-    CGPoint videoOrigin;
-    if (self.bounds.size.width > self.bounds.size.height * streamAspectRatio) {
-        videoSize = CGSizeMake(self.bounds.size.height * streamAspectRatio, self.bounds.size.height);
-    } else {
-        videoSize = CGSizeMake(self.bounds.size.width, self.bounds.size.width / streamAspectRatio);
-    }
-    videoOrigin = CGPointMake(self.bounds.size.width / 2 - videoSize.width / 2,
-                              self.bounds.size.height / 2 - videoSize.height / 2);
-    
+    // The video is centered in our bounds (see layoutSubviews)
+    CGSize videoSize = [self getVideoAreaSize];
+    CGPoint videoOrigin = CGPointMake(self.bounds.size.width / 2 - videoSize.width / 2,
+                                      self.bounds.size.height / 2 - videoSize.height / 2);
+
     // Move the cursor on the host if no buttons are pressed.
     // Motion with buttons pressed in handled in touchesMoved:
     if (lastMouseButtonMask == 0) {
         [self updateCursorLocation:request.location isMouse:YES];
     }
     
-    // The pointer interaction should cover the video region only
-    return [UIPointerRegion regionWithRect:CGRectMake(videoOrigin.x, videoOrigin.y, videoSize.width, videoSize.height) identifier:nil];
+    // The pointer interaction should cover the visible video region only
+    return [UIPointerRegion regionWithRect:CGRectIntersection(CGRectMake(videoOrigin.x, videoOrigin.y, videoSize.width, videoSize.height), self.bounds) identifier:nil];
 }
 
 - (UIPointerStyle *)pointerInteraction:(UIPointerInteraction *)interaction styleForRegion:(UIPointerRegion *)region  API_AVAILABLE(ios(13.4)) {

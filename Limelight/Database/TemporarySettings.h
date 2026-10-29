@@ -40,6 +40,11 @@
 @property (nonatomic) BOOL btMouseSupport;
 @property (nonatomic) BOOL absoluteTouchMode;
 @property (nonatomic) BOOL statsOverlay;
+@property (nonatomic) enum {
+    VIDEO_SCALING_FIT,
+    VIDEO_SCALING_FILL,
+    VIDEO_SCALING_STRETCH,
+} videoScalingMode;
 
 - (id) initFromSettings:(Settings*)settings;
 
