@@ -19,8 +19,18 @@
 }
 
 - (UIViewController*) activeViewController {
-    UIViewController *topController = [UIApplication sharedApplication].keyWindow.rootViewController;
-    
+    UIWindow *window = [UIApplication sharedApplication].keyWindow;
+    if (window == nil) {
+        // There may not be a key window yet if we're shown during launch
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                window = ((UIWindowScene*)scene).windows.firstObject;
+                break;
+            }
+        }
+    }
+    UIViewController *topController = window.rootViewController;
+
     while (topController.presentedViewController) {
         topController = topController.presentedViewController;
     }

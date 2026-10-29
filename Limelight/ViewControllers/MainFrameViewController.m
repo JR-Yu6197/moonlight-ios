@@ -436,7 +436,9 @@ static NSMutableSet* hostList;
 }
 
 - (UIViewController*) activeViewController {
-    UIViewController *topController = [UIApplication sharedApplication].keyWindow.rootViewController;
+    // Prefer our own window, since there may not be a key window yet during launch
+    UIWindow *window = self.view.window ?: [UIApplication sharedApplication].keyWindow;
+    UIViewController *topController = window.rootViewController;
 
     while (topController.presentedViewController) {
         topController = topController.presentedViewController;
