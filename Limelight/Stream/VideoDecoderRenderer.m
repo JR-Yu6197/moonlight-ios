@@ -99,16 +99,39 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     self->frameRate = frameRate;
 }
 
+- (CADisplayLink*)createDisplayLink
+{
+#if defined(__IPHONE_27_0) || defined(__TVOS_27_0)
+    if (@available(iOS 27.0, tvOS 27.0, *)) {
+        // Prefer a display link from our window scene, which is retargeted if the scene
+        // moves to another display (like when an iPhone Duo is folded or unfolded)
+        UIWindowScene* windowScene = _view.window.windowScene;
+        if (windowScene != nil) {
+            CADisplayLink* displayLink = [windowScene displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
+            if (displayLink != nil) {
+                return displayLink;
+            }
+        }
+    }
+#endif
+    return [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
+}
+
 - (void)start
 {
-    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
-    if (@available(iOS 15.0, tvOS 15.0, *)) {
-        _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(self->frameRate, self->frameRate, self->frameRate);
-    }
-    else {
-        _displayLink.preferredFramesPerSecond = self->frameRate;
-    }
-    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSDefaultRunLoopMode];
+    // We're called on a thread inside common, but we need the main thread to get our
+    // window scene. The display link fires on the main thread, so this also ensures we
+    // don't race with stop, which is always called after start.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self->_displayLink = [self createDisplayLink];
+        if (@available(iOS 15.0, tvOS 15.0, *)) {
+            self->_displayLink.preferredFrameRateRange = CAFrameRateRangeMake(self->frameRate, self->frameRate, self->frameRate);
+        }
+        else {
+            self->_displayLink.preferredFramesPerSecond = self->frameRate;
+        }
+        [self->_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSDefaultRunLoopMode];
+    });
 }
 
 // TODO: Refactor this
@@ -142,7 +165,17 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
 - (void)stop
 {
-    [_displayLink invalidate];
+    // Invalidate the display link on the main thread where it is created and fires.
+    // This also ensures no callback can run after we return. LiStopConnection() is
+    // always called on a background queue, so the main thread is never waiting on us.
+    if ([NSThread isMainThread]) {
+        [_displayLink invalidate];
+    }
+    else {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            [self->_displayLink invalidate];
+        });
+    }
 }
 
 #define NALU_START_PREFIX_SIZE 3
