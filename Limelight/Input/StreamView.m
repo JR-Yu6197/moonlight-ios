@@ -41,6 +41,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     UIResponder* touchHandler;
     
     id<UserInteractionDelegate> interactionDelegate;
+    __weak ControllerSupport* controllerSupport;
     NSTimer* interactionTimer;
     BOOL hasUserInteracted;
     
@@ -51,6 +52,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
      interactionDelegate:(id<UserInteractionDelegate>)interactionDelegate
                   config:(StreamConfiguration*)streamConfig {
     self->interactionDelegate = interactionDelegate;
+    self->controllerSupport = controllerSupport;
     self->streamAspectRatio = (float)streamConfig.width / (float)streamConfig.height;
     
     TemporarySettings* settings = [[[DataManager alloc] init] getSettings];
@@ -476,7 +478,12 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         UITouch* touch = [touches anyObject];
         if (touch.type == UITouchTypeIndirectPointer) {
             if (@available(iOS 14.0, *)) {
-                if ([GCMouse current] != nil) {
+                // iPhone only supports mice through AssistiveTouch, which doesn't always
+                // give us the mouse buttons through GCMouse. Use these button events until
+                // GCMouse delivers one, so each click isn't sent to the host twice.
+                if ([GCMouse current] != nil &&
+                    ([UIDevice currentDevice].userInterfaceIdiom != UIUserInterfaceIdiomPhone ||
+                     [controllerSupport hasReceivedMouseButtonEvents])) {
                     // We'll handle this with GCMouse. Do nothing here.
                     return YES;
                 }
@@ -686,7 +693,12 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
                           defaultRegion:(UIPointerRegion *)defaultRegion API_AVAILABLE(ios(13.4)) {
     if (@available(iOS 14.0, *)) {
         if ([GCMouse current] != nil) {
-            // We'll handle this with GCMouse. Do nothing here.
+            // We'll handle this with GCMouse. On iPhone, the system pointer comes from
+            // AssistiveTouch, so keep it hidden over the stream (see styleForRegion)
+            // instead of showing it in addition to the host's cursor.
+            if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
+                return [UIPointerRegion regionWithRect:self.bounds identifier:nil];
+            }
             return nil;
         }
     }
