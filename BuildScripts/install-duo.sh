@@ -12,13 +12,20 @@ DEVICE="${1:-JRiPhone}"
 BUNDLE_ID="com.jryu6197.moonlight-duo"
 LOG="DerivedData/install-duo.log"
 
+# xcodebuild matches a UDID with id= and a device name with name=
+if [[ "$DEVICE" =~ ^[0-9A-Fa-f-]{24,}$ ]]; then
+    DESTINATION="platform=iOS,id=$DEVICE"
+else
+    DESTINATION="platform=iOS,name=$DEVICE"
+fi
+
 cd "$(dirname "$0")/.."
 mkdir -p DerivedData
 
 # Release builds are optimized, which matters for streaming performance
 echo "Building for $DEVICE..."
 if ! xcodebuild -project Moonlight.xcodeproj -scheme Moonlight -configuration Release \
-        -destination "platform=iOS,name=$DEVICE" -derivedDataPath DerivedData \
+        -destination "$DESTINATION" -derivedDataPath DerivedData \
         -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
         build > "$LOG" 2>&1; then
     grep -E "error:" "$LOG" | head -20 || true
