@@ -30,6 +30,13 @@
 - (id)initWithRefreshRate:(float)arg1 videoDynamicRange:(int)arg2;
 @end
 
+#if !TARGET_OS_TV
+// How far a swipe from the left edge must go to end the stream. Taps and short
+// drags near the edge (like on a dock at the side of the host's desktop) stay
+// well under this, while a deliberate swipe easily covers it.
+static const CGFloat MIN_EXIT_SWIPE_DISTANCE = 100;
+#endif
+
 @implementation StreamFrameViewController {
     ControllerSupport *_controllerSupport;
     StreamManager *_streamMan;
@@ -129,8 +136,13 @@
     [self.view addGestureRecognizer:_playPauseTapGestureRecognizer];
 
 #else
-    _exitSwipeRecognizer = [[UIScreenEdgePanGestureRecognizer alloc] initWithTarget:self action:@selector(edgeSwiped)];
+    _exitSwipeRecognizer = [[UIScreenEdgePanGestureRecognizer alloc] initWithTarget:self action:@selector(edgeSwiped:)];
     _exitSwipeRecognizer.edges = UIRectEdgeLeft;
+    
+    // Only a finger can swipe to end the stream, so dragging a mouse
+    // along the edge of the screen won't end it
+    _exitSwipeRecognizer.allowedTouchTypes = @[@(UITouchTypeDirect)];
+    
     _exitSwipeRecognizer.delaysTouchesBegan = NO;
     _exitSwipeRecognizer.delaysTouchesEnded = NO;
     
@@ -388,11 +400,21 @@
     [self returnToMainFrame];
 }
 
-- (void)edgeSwiped {
+#if !TARGET_OS_TV
+- (void)edgeSwiped:(UIScreenEdgePanGestureRecognizer*)gesture {
+    // Wait for a deliberate swipe, so a tap or short drag near the edge of
+    // the screen (like on a dock at the side of the host's desktop) doesn't
+    // end the stream
+    if (gesture.state != UIGestureRecognizerStateEnded ||
+        [gesture translationInView:self.view].x < MIN_EXIT_SWIPE_DISTANCE) {
+        return;
+    }
+    
     Log(LOG_I, @"User swiped to end stream");
     
     [self returnToMainFrame];
 }
+#endif
 
 - (void) connectionStarted {
     Log(LOG_I, @"Connection started");
