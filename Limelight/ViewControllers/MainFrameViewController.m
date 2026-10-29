@@ -626,8 +626,19 @@ static NSMutableSet* hostList;
         }
     }
     
-    _streamConfig.height = [streamSettings.height intValue];
-    _streamConfig.width = [streamSettings.width intValue];
+    if ([streamSettings.width intValue] == RESOLUTION_MATCH_DISPLAY_FULL ||
+        [streamSettings.width intValue] == RESOLUTION_MATCH_DISPLAY_SAFE_AREA) {
+        // Match the display we're about to stream on
+        CGSize displayResolution = [Utils getDisplayResolutionForWindow:self.view.window
+                                                               safeArea:[streamSettings.width intValue] == RESOLUTION_MATCH_DISPLAY_SAFE_AREA];
+        _streamConfig.width = displayResolution.width;
+        _streamConfig.height = displayResolution.height;
+        Log(LOG_I, @"Matching display resolution: %dx%d", _streamConfig.width, _streamConfig.height);
+    }
+    else {
+        _streamConfig.height = [streamSettings.height intValue];
+        _streamConfig.width = [streamSettings.width intValue];
+    }
 #if TARGET_OS_TV
     // Don't allow streaming 4K on the Apple TV HD
     struct utsname systemInfo;
