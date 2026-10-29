@@ -8,6 +8,7 @@
 
 #import "StreamView.h"
 #include <Limelight.h>
+#import <AVFoundation/AVFoundation.h>
 #import "DataManager.h"
 #import "ControllerSupport.h"
 #import "KeyboardSupport.h"
@@ -182,6 +183,28 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     } else {
         return CGSizeMake(self.bounds.size.width, self.bounds.size.width / streamAspectRatio);
     }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+
+    // Our size can change mid-stream (rotation, iPad multitasking, or folding and
+    // unfolding a foldable like iPhone Duo), so keep the video layer sized to the
+    // same video region that we use for mapping touch and mouse input.
+    CGSize videoSize = [self getVideoAreaSize];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    for (CALayer* layer in self.layer.sublayers) {
+        if ([layer isKindOfClass:[AVSampleBufferDisplayLayer class]]) {
+            layer.position = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
+            layer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
+        }
+    }
+    [CATransaction commit];
+
+#if !TARGET_OS_TV
+    [onScreenControls updateLayout];
+#endif
 }
 
 - (CGPoint) adjustCoordinatesForVideoArea:(CGPoint)point {
@@ -615,6 +638,10 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 }
 
 - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {
+    // Release any on-screen controls held by these touches, so they don't
+    // keep a stick deflected (or get re-applied when the controls are laid
+    // out again) after the system cancels the touches
+    [onScreenControls handleTouchUpEvent:touches];
     [touchHandler touchesCancelled:touches withEvent:event];
     [self handleMouseButtonEvent:BUTTON_ACTION_RELEASE
                       forTouches:touches

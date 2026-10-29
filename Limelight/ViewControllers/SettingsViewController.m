@@ -16,6 +16,7 @@
 @implementation SettingsViewController {
     NSInteger _bitrate;
     NSInteger _lastSelectedResolutionIndex;
+    BOOL _safeAreaPadded;
 }
 
 @dynamic overrideUserInterfaceStyle;
@@ -101,13 +102,16 @@ CGSize resolutionTable[RESOLUTION_TABLE_SIZE];
     [super viewSafeAreaInsetsDidChange];
     
     if (@available(iOS 11.0, *)) {
-        for (UIView* view in self.view.subviews) {
-            // HACK: The official safe area is much too large for our purposes
-            // so we'll just use the presence of any safe area to indicate we should
-            // pad by 20.
-            if (self.view.safeAreaInsets.left >= 20 || self.view.safeAreaInsets.right >= 20) {
-                view.frame = CGRectMake(view.frame.origin.x + 20, view.frame.origin.y, view.frame.size.width, view.frame.size.height);
+        // HACK: The official safe area is much too large for our purposes
+        // so we'll just use the presence of any safe area to indicate we should
+        // pad by 20. The safe area can change many times (like when an iPhone Duo
+        // is folded or unfolded), so only pad once and remove it when not needed.
+        BOOL needsPadding = self.view.safeAreaInsets.left >= 20 || self.view.safeAreaInsets.right >= 20;
+        if (needsPadding != _safeAreaPadded) {
+            for (UIView* view in self.view.subviews) {
+                view.frame = CGRectOffset(view.frame, needsPadding ? 20 : -20, 0);
             }
+            _safeAreaPadded = needsPadding;
         }
     }
 }

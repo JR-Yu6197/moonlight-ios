@@ -211,6 +211,33 @@
     [self.view addSubview:_tipLabel];
 }
 
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+
+    // Our view can change size mid-stream (rotation, iPad multitasking, or
+    // folding and unfolding a foldable like iPhone Duo), so keep the stream
+    // filling it. The StreamView will adapt the video and on-screen controls.
+    CGRect bounds = self.view.bounds;
+    if (_scrollView != nil) {
+        if (!CGRectEqualToRect(_scrollView.frame, bounds)) {
+            [_scrollView setZoomScale:1.0f animated:NO];
+            _scrollView.frame = bounds;
+            _streamView.frame = bounds;
+            _scrollView.contentSize = bounds.size;
+        }
+    }
+    else if (!CGRectEqualToRect(_streamView.frame, bounds)) {
+        _streamView.frame = bounds;
+    }
+
+    _stageLabel.center = CGPointMake(bounds.size.width / 2, bounds.size.height / 2);
+    _spinner.center = CGPointMake(bounds.size.width / 2, bounds.size.height / 2 - _stageLabel.frame.size.height - _spinner.frame.size.height);
+    _tipLabel.center = CGPointMake(bounds.size.width / 2, bounds.size.height * 0.9);
+    if (_overlayView != nil) {
+        _overlayView.center = CGPointMake(bounds.size.width / 2, _overlayView.frame.size.height / 2);
+    }
+}
+
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
     return _streamView;
 }
@@ -702,6 +729,14 @@
 - (BOOL)shouldAutorotate {
     return YES;
 }
+
+#if defined(__IPHONE_27_1) && !TARGET_OS_TV
+- (UIVerticalBarBehavior)preferredVerticalBarBehavior API_AVAILABLE(ios(27.1)) {
+    // The stream is fullscreen video, so keep the vertical bar on
+    // displays like the inner display of iPhone Duo out of the way
+    return UIVerticalBarBehaviorDisabled;
+}
+#endif
 
 - (BOOL)prefersPointerLocked {
     // Pointer lock breaks the UIKit mouse APIs, which is a problem because

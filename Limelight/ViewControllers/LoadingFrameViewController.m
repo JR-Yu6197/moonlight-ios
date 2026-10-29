@@ -18,6 +18,12 @@
     self.loadingSpinner.center = CGPointMake(self.view.frame.size.width / 2, self.view.frame.size.height / 2);
 }
 
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    // keep the loading spinner centered if our size changes
+    self.loadingSpinner.center = CGPointMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2);
+}
+
 - (UIViewController*) activeViewController {
     UIWindow *window = [UIApplication sharedApplication].keyWindow;
     if (window == nil) {
