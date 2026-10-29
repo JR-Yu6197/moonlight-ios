@@ -27,4 +27,6 @@ if ! xcodebuild -project Moonlight.xcodeproj -scheme Moonlight -configuration Re
 fi
 
 xcrun devicectl device install app --device "$DEVICE" DerivedData/Build/Products/Release-iphoneos/Moonlight.app
-xcrun devicectl device process launch --device "$DEVICE" "$BUNDLE_ID"
+# Launching fails while the phone is locked, which is fine since it's installed
+xcrun devicectl device process launch --device "$DEVICE" "$BUNDLE_ID" > /dev/null 2>&1 ||
+    echo "Installed. Unlock the phone and open Moonlight Duo."
